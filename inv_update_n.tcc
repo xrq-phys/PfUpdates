@@ -131,7 +131,7 @@ void push_Xij_update(updated_Xij<T> &Xij, int osi, int msj, bool compute_pfaff) 
   // If it's the first update, C is not needed.
   if (k == 0) {
     if (compute_pfaff)
-			Xij.Pfa *= -UMV(0, 0);
+      Xij.Pfa *= -UMV(0, 0);
     return;
   }
 
