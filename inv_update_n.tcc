@@ -77,9 +77,13 @@ struct updated_Xij
     T *trwork = new T[lwork];
 
     signed info = getrf(n, n, &A(0, 0), ldM, ipiv);
-		cout << "GETRF: n=" << n << " info=" << info << endl;
+#ifdef _DEBUG
+    cout << "GETRF: n=" << n << " info=" << info << endl;
+#endif
     info = getri(n, &A(0, 0), ldM, ipiv, trwork, lwork);
-		cout << "GETRI: n=" << n << " info=" << info << endl;
+#ifdef _DEBUG
+    cout << "GETRI: n=" << n << " info=" << info << endl;
+#endif
 
     delete[] ipiv;
     delete[] trwork;
@@ -163,7 +167,9 @@ void push_Xij_update(updated_Xij<T> &Xij, int osi, int msj, bool compute_pfaff) 
     // Compute pfaffian.
     signed info =
         skpfa('U', 2 * k, &C(0, 0), 2 * k, &PfaMul, iwork, pfwork, lwork);
+#ifdef _DEBUG
     cout << "SKPFA: info=" << info << endl;
+#endif
     if (k % 2)
       // The 1st, 3rd, 5th... update in the series.
       Xij.Pfa *= -PfaMul;
@@ -235,6 +241,8 @@ template <typename T> void apply_Xij_update(updated_Xij<double> &Xij) {
 
   int n = Xij.n;
   int k = Xij.from_idx.size();
+  if (k == 0)
+    return;
 
   colmaj<T> W(Xij.W_, Xij.ldW);
   colmaj<T> UMU(Xij.UMU_, Xij.ldW);
@@ -268,13 +276,22 @@ template <typename T> void apply_Xij_update(updated_Xij<double> &Xij) {
   signed lwork = 2 * k * 2 * k;
   T *trwork = new T[lwork];
 
-  int info = getrf(2 * k, 2 * k, &C(0, 0), 2 * k, ipiv);
-  cout << "GETRF: n=" << 2 * k << " info=" << info << endl;
-  info = getri(2 * k, &C(0, 0), 2 * k, ipiv, trwork, lwork);
-  cout << "GETRI: n=" << 2 * k << " info=" << info << endl;
+  if (k == 1) {
+    C(0, 1) = -1.0 / C(0, 1);
+    C(1, 0) = -1.0 / C(1, 0); 
+  } else {
+    int info = getrf(2 * k, 2 * k, &C(0, 0), 2 * k, ipiv);
+#ifdef _DEBUG
+    cout << "GETRF: n=" << 2 * k << " info=" << info << endl;
+#endif
+    info = getri(2 * k, &C(0, 0), 2 * k, ipiv, trwork, lwork);
+#ifdef _DEBUG
+    cout << "GETRI: n=" << 2 * k << " info=" << info << endl;
+#endif
 
-  inv_update_n<T>(n, k, Xij.M_, Xij.ldM, Xij.U_, Xij.Q_, Xij.P_, &C(0, 0),
-                  &C(0, k), &C(k, k), 2 * k);
+    inv_update_n<T>(n, k, Xij.M_, Xij.ldM, Xij.U_, Xij.Q_, Xij.P_, &C(0, 0),
+                    &C(0, k), &C(k, k), 2 * k);
+  }
 
   // Apply hopping.
   for (int j = 0; j < k; ++j)
