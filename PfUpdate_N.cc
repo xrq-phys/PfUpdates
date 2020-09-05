@@ -5,10 +5,17 @@
 #include <iostream>
 #include <chrono>
 #include <random>
+#ifdef _Intel_Advisor
+#include <ittnotify.h>
+#endif
 
 int main(const int argc, const char *argv[]) {
   using namespace std;
   using namespace std::chrono;
+
+#ifdef _Intel_Advisor
+  __itt_pause();
+#endif
 
   const unsigned nsite = 450;
   const unsigned npar = nsite * nsite;
@@ -56,6 +63,9 @@ int main(const int argc, const char *argv[]) {
   const unsigned n_test = 20;
 
   auto start = high_resolution_clock::now();
+#ifdef _Intel_Advisor
+  __itt_resume();
+#endif
   
   for (int itest = 0; itest < n_test; ++itest) {
     for (int i = 0; i < n_update; ++i) {
@@ -83,6 +93,9 @@ int main(const int argc, const char *argv[]) {
   auto elapsed = high_resolution_clock::now() - start;
   long long mus = duration_cast<microseconds>(elapsed).count();
   double mis = double(mus) / 1000;
+#ifdef _Intel_Advisor
+  __itt_pause();
+#endif
 
   cout << "Test for n=" << nfermi << " with " << n_update
        << " electron update elapsed " << mis << " ms." << endl
