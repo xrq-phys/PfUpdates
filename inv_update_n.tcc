@@ -216,7 +216,7 @@ void inv_update_n(unsigned n, unsigned k, T *A_, int ldA, T *U_, T *Q_, T *P_,
       for (unsigned l = 0; l < k; ++l)
         for (unsigned m = 0; m < l; ++m) {
           A(i, j) -= D(m, l) * (Q(i, m) * Q(j, l) - Q(i, l) * Q(j, m)) -
-                     E(m, l) * (Q(i, m) * Q(j, l) - Q(i, l) * Q(j, m));
+                     E(m, l) * (P(i, m) * P(j, l) - P(i, l) * P(j, m));
         }
     }
   }
