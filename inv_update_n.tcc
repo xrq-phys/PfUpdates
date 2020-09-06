@@ -206,20 +206,35 @@ void inv_update_n(unsigned n, unsigned k, T *A_, int ldA, T *U_, T *Q_, T *P_,
   colmaj<T> E(E_, ldC);
   colmaj<T> F(F_, ldC);
 
+  // BLAS scratchpads.
+  colmaj<T> AUD(&U(0, 0), ldA); ///< Use U as AUD buffer.
+  colmaj<T> AUF(new T[n * k], n);
+  colmaj<T> AVE(new T[n * k], n);
+
+  // NOTE: To do this UU/VV sectors, D and E must be complete antisymmetric instead of uplo stored.
+  gemm('N', 'N', n, k, k, T(1.0), &Q(0, 0), ldA, &D(0, 0), ldC, T(0.0),
+       &AUD(0, 0), ldA); ///< inv(A)UD
+  gemm('N', 'N', n, k, k, T(1.0), &P(0, 0), ldA, &E(0, 0), ldC, T(0.0),
+       &AVE(0, 0), n); ///< inv(A)VE
+  
+  gemm('N', 'N', n, k, k, T(1.0), &Q(0, 0), ldA, &F(0, 0), ldC, T(0.0),
+       &AUF(0, 0), n); ///< inv(A)UF
+
   for (unsigned j = 0; j < n; ++j) {
-    for (unsigned i = 0; i < n; ++i) {
-
-      for (unsigned l = 0; l < k; ++l)
-        for (unsigned m = 0; m < k; ++m)
-          A(i, j) -= F(m, l) * (P(i, l) * Q(j, m) - P(j, l) * Q(i, m));
-
-      for (unsigned l = 0; l < k; ++l)
-        for (unsigned m = 0; m < l; ++m) {
-          A(i, j) -= D(m, l) * (Q(i, m) * Q(j, l) - Q(i, l) * Q(j, m)) -
-                     E(m, l) * (P(i, m) * P(j, l) - P(i, l) * P(j, m));
-        }
+    for (unsigned l = 0; l < k; ++l) {
+      T Q_jk = Q(j, k);
+      T P_jk = P(j, k);
+      T AUF_jk = AUF(j, k);
+    
+      for (unsigned i = 0; i < n; ++i)
+        A(i, j) += AUD(i, k) * Q_jk + P(i, k) * AUF_jk -
+                   (AUF(i, k) + AVE(i, k)) * P_jk;
     }
   }
+
+  // delete[](&AUD(0, 0));
+  delete[](&AUF(0, 0));
+  delete[](&AVE(0, 0));
 }
 
 template <typename T>
