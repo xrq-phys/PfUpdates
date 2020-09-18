@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30428.66
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PfUpdate_N", "PfUpdate_N.vcxproj", "{A3DC8811-D284-4B7B-B694-93D206B83431}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PfUpdates", "PfUpdates.vcxproj", "{A3DC8811-D284-4B7B-B694-93D206B83431}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

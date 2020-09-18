@@ -304,8 +304,8 @@ template <typename T> void apply_Xij_update(updated_Xij<double> &Xij) {
     cout << "GETRI: n=" << 2 * k << " info=" << info << endl;
 #endif
   }
-	inv_update_n<T>(n, k, Xij.M_, Xij.ldM, Xij.U_, Xij.Q_, Xij.P_, &C(0, 0),
-									&C(0, k), &C(k, k), 2 * k);
+  inv_update_n<T>(n, k, Xij.M_, Xij.ldM, Xij.U_, Xij.Q_, Xij.P_, &C(0, 0),
+                  &C(0, k), &C(k, k), 2 * k);
 
   // Apply hopping.
   for (int j = 0; j < k; ++j)

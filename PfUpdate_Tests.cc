@@ -1,7 +1,7 @@
 // PfUpdate_N.cc : This file contains the 'main' function. Program execution begins and ends there.
 //
 
-#include "inv_update_n.tcc"
+#include "inv_update.tcc"
 #include <iostream>
 #include <chrono>
 #include <random>
@@ -59,8 +59,8 @@ int main(const int argc, const char *argv[]) {
   updated_Xij<double> Xij(param, cfg, Mbuf, nfermi, Ubuf, Pbuf, Qbuf, Wbuf,
                           ksize * 2, Bbuf1, Bbuf2, Bbuf3);
 
-  const unsigned n_update = 1;
-  const unsigned n_test = 20;
+  const unsigned n_update = 16;
+  const unsigned n_test = 200;
 
   auto start = high_resolution_clock::now();
 #ifdef _Intel_Advisor
@@ -87,7 +87,7 @@ int main(const int argc, const char *argv[]) {
         push_Xij_update<double>(Xij, cpos, msj);
       }
     }
-		apply_Xij_update<double>(Xij);
+    apply_Xij_update<double>(Xij);
   }
 
   auto elapsed = high_resolution_clock::now() - start;

@@ -15,20 +15,20 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="inv_update_n.tcc">
+    <ClCompile Include="src/inv_update.tcc">
       <Filter>Header Files</Filter>
     </ClCompile>
-    <ClCompile Include="PfUpdate_N.cc">
+    <ClCompile Include="PfUpdate_Tests.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="colmaj.tcc">
+    <None Include="src/colmaj.tcc">
       <Filter>Header Files</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="blalink.hh">
+    <ClInclude Include="src/blalink.hh">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
