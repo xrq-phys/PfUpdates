@@ -59,8 +59,12 @@ int main(const int argc, const char *argv[]) {
   updated_Xij<double> Xij(param, cfg, Mbuf, nfermi, Ubuf, Pbuf, Qbuf, Wbuf,
                           ksize * 2, Bbuf1, Bbuf2, Bbuf3);
 
-  const unsigned n_update = 16;
-  const unsigned n_test = 200;
+  const unsigned n_update = 8;
+#ifdef _DEBUG
+  const unsigned n_test = 4;
+#else
+  const unsigned n_test = 2000;
+#endif
 
   auto start = high_resolution_clock::now();
 #ifdef _Intel_Advisor

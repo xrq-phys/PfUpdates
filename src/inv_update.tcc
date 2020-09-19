@@ -1,10 +1,11 @@
 #include "colmaj.tcc"
 #include "blalink.hh"
+#include "skpfa.hh"
+#include "blis.h"
 #include <vector>
 #include <random>
 #include <iostream>
 
-enum SK_Matrix_Store { SK_Upper, SK_Lower };
 
 template <typename T>
 struct orbital_Xij
@@ -61,6 +62,7 @@ struct updated_Xij
     using namespace std;
     colmaj<T> A(M_, ldM);
     colmaj<T> X(param.X_, param.ldX);
+    colmaj<T> G(new T[n * n], n);
      
     for (unsigned j = 0; j < n; ++j) {
       for (unsigned i = 0; i < j; ++i) {
@@ -72,21 +74,19 @@ struct updated_Xij
     
     // TODO: Compute Pfaffian.
     // Allocate scratchpad.
-    signed *ipiv = new signed[n];
-    signed lwork = n * 32;
-    T *trwork = new T[lwork];
+    signed *iPov = new signed[n + 1];
+    signed lwork = n * 16; ///< npanel = 16 is just a easy value.
+    T *pfwork = new T[lwork];
 
-    signed info = getrf(n, n, &A(0, 0), ldM, ipiv);
+    signed info = skpfa(BLIS_UPPER, n, &A(0, 0), A.ld, &G(0, 0), G.ld, iPov,
+                        true, &Pfa, pfwork, lwork);
 #ifdef _DEBUG
-    cout << "GETRF: n=" << n << " info=" << info << endl;
-#endif
-    info = getri(n, &A(0, 0), ldM, ipiv, trwork, lwork);
-#ifdef _DEBUG
-    cout << "GETRI: n=" << n << " info=" << info << endl;
+    cout << "SKPFA+INV: n=" << n << " info=" << info << endl;
 #endif
 
-    delete[] ipiv;
-    delete[] trwork;
+    delete[] iPov;
+    delete[] pfwork;
+    delete[](&G(0, 0));
   }
 };
 
@@ -117,7 +117,8 @@ void push_Xij_update(updated_Xij<T> &Xij, int osi, int msj, bool compute_pfaff) 
     U(i, k) = Xpar(Xij.elem_cfg.at(i), osi) - Xpar(Xij.elem_cfg.at(i), osj);
     P(i, k) = M(i, msj);
   }
-  gemv('N', n, n, T(1.0), &M(0, 0), Xij.ldM, &U(0, k), 1, T(0.0), &Q(0, k), 1);
+  gemv(BLIS_NO_TRANSPOSE, n, n, T(1.0), &M(0, 0), Xij.ldM, &U(0, k), 1, T(0.0),
+       &Q(0, k), 1);
 
   for (int l = 0; l < k; ++l)
     W(l, k) = -Xpar(Xij.to_site.at(l), osi) + Xpar(Xij.to_site.at(l), osj);
@@ -143,7 +144,8 @@ void push_Xij_update(updated_Xij<T> &Xij, int osi, int msj, bool compute_pfaff) 
     // NOTE: Refresh k to be new size.
     k += 1;
     // Allocate scratchpad.
-    signed *iwork = new signed[2 * k];
+    colmaj<T> SpG(new T[2 * k * 2 * k], 2 * k);
+    signed *iPov = new signed[2 * k + 1];
     signed lwork = 2 * k * 2 * k;
     T *pfwork = new T[lwork];
 
@@ -165,8 +167,8 @@ void push_Xij_update(updated_Xij<T> &Xij, int osi, int msj, bool compute_pfaff) 
 
     double PfaMul;
     // Compute pfaffian.
-    signed info =
-        skpfa('U', 2 * k, &C(0, 0), 2 * k, &PfaMul, iwork, pfwork, lwork);
+    signed info = skpfa(BLIS_UPPER, 2 * k, &C(0, 0), 2 * k, &SpG(0, 0), 2 * k,
+                        iPov, false, &PfaMul, pfwork, lwork);
 #ifdef _DEBUG
     cout << "SKPFA: info=" << info << endl;
 #endif
@@ -176,12 +178,14 @@ void push_Xij_update(updated_Xij<T> &Xij, int osi, int msj, bool compute_pfaff) 
     else
       Xij.Pfa *= PfaMul;
 
-    delete[] iwork;
+    delete[] iPov;
     delete[] pfwork;
+    delete[](&SpG(0, 0));
     delete[](&C(0, 0));
   } else
     // Set to 0.0 and awaits computation @ update time.
     Xij.Pfa = 0.0;
+
 }
 
 template <typename T>
@@ -212,13 +216,13 @@ void inv_update_n(unsigned n, unsigned k, T *A_, int ldA, T *U_, T *Q_, T *P_,
   colmaj<T> AVE(new T[n * k], n);
 
   // NOTE: To do this UU/VV sectors, D and E must be complete antisymmetric instead of uplo stored.
-  gemm('N', 'N', n, k, k, T(1.0), &Q(0, 0), ldA, &D(0, 0), ldC, T(0.0),
-       &AUD(0, 0), ldA); ///< inv(A)UD
-  gemm('N', 'N', n, k, k, T(1.0), &P(0, 0), ldA, &E(0, 0), ldC, T(0.0),
-       &AVE(0, 0), n); ///< inv(A)VE
+  gemm(BLIS_NO_TRANSPOSE, BLIS_NO_TRANSPOSE, n, k, k, T(1.0), &Q(0, 0), ldA,
+       &D(0, 0), ldC, T(0.0), &AUD(0, 0), ldA); ///< inv(A)UD
+  gemm(BLIS_NO_TRANSPOSE, BLIS_NO_TRANSPOSE, n, k, k, T(1.0), &P(0, 0), ldA,
+       &E(0, 0), ldC, T(0.0), &AVE(0, 0), n); ///< inv(A)VE
   
-  gemm('N', 'N', n, k, k, T(1.0), &Q(0, 0), ldA, &F(0, 0), ldC, T(0.0),
-       &AUF(0, 0), n); ///< inv(A)UF
+  gemm(BLIS_NO_TRANSPOSE, BLIS_NO_TRANSPOSE, n, k, k, T(1.0), &Q(0, 0), ldA,
+       &F(0, 0), ldC, T(0.0), &AUF(0, 0), n); ///< inv(A)UF
 
   for (unsigned j = 0; j < n; ++j) {
     for (unsigned l = 0; l < k; ++l) {
@@ -238,17 +242,25 @@ void inv_update_n(unsigned n, unsigned k, T *A_, int ldA, T *U_, T *Q_, T *P_,
 }
 
 template <typename T>
-void complete_antisym(const SK_Matrix_Store uplo, unsigned n, T *A_, int ldA) {
+void complete_antisym(const uplo_t uplo, unsigned n, T *A_, int ldA) {
   colmaj<T> A(A_, ldA);
 
-  if (uplo == SK_Upper)
+  switch (uplo) {
+  case BLIS_UPPER:
     for (int j = 0; j < n; ++j)
       for (int i = 0; i < j; ++i)
         A(j, i) = -A(i, j);
-  else if (uplo == SK_Lower)
+    break;
+
+  case BLIS_LOWER:
     for (int j = 0; j < n; ++j)
       for (int i = j + 1; i < n; ++i)
         A(j, i) = -A(i, j);
+    break;
+
+  default:
+    return;
+  }
 }
 
 template <typename T> void apply_Xij_update(updated_Xij<double> &Xij) {
@@ -263,6 +275,7 @@ template <typename T> void apply_Xij_update(updated_Xij<double> &Xij) {
   colmaj<T> UMU(Xij.UMU_, Xij.ldW);
   colmaj<T> VMV(Xij.VMV_, Xij.ldW);
   colmaj<T> UMV(Xij.UMV_, Xij.ldW);
+  colmaj<T> G(new T[2 * k * 2 * k], 2 * k);
 
   // Repeat: assemble C+BMB buffer.
   colmaj<T> C(new double[2 * k * 2 * k], 2 * k);
@@ -287,21 +300,19 @@ template <typename T> void apply_Xij_update(updated_Xij<double> &Xij) {
     }
 
   // Allocate scratchpad.
-  signed *ipiv = new signed[2 * k];
+  signed *iPov = new signed[2 * k + 1];
   signed lwork = 2 * k * 2 * k;
-  T *trwork = new T[lwork];
+  T *pfwork = new T[lwork];
+  T PfaRatio;
 
   if (k == 1) {
     C(0, 1) = -1.0 / C(0, 1);
     C(1, 0) = -1.0 / C(1, 0); 
   } else {
-    int info = getrf(2 * k, 2 * k, &C(0, 0), 2 * k, ipiv);
+    signed info = skpfa(BLIS_UPPER, 2 * k, &C(0, 0), C.ld, &G(0, 0), G.ld, iPov,
+                        true, &PfaRatio, pfwork, lwork);
 #ifdef _DEBUG
-    cout << "GETRF: n=" << 2 * k << " info=" << info << endl;
-#endif
-    info = getri(2 * k, &C(0, 0), 2 * k, ipiv, trwork, lwork);
-#ifdef _DEBUG
-    cout << "GETRI: n=" << 2 * k << " info=" << info << endl;
+    cout << "SKPFA+INV: n=" << 2 * k << " info=" << info << endl;
 #endif
   }
   inv_update_n<T>(n, k, Xij.M_, Xij.ldM, Xij.U_, Xij.Q_, Xij.P_, &C(0, 0),
@@ -313,7 +324,8 @@ template <typename T> void apply_Xij_update(updated_Xij<double> &Xij) {
   Xij.from_idx.clear();
   Xij.to_site.clear();
 
+  delete[](&G(0, 0));
   delete[](&C(0, 0));
-  delete[] ipiv;
-  delete[] trwork;
+  delete[] pfwork;
+  delete[] iPov;
 }

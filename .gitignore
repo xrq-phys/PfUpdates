@@ -351,3 +351,6 @@ MigrationBackup/
 
 # VS Diagnostic and Profiler session file
 *.diagsession
+
+# Intel Advisor Results
+My Advisor Results -*/
