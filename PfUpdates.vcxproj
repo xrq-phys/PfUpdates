@@ -162,8 +162,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src/inv_update.tcc" />
     <ClCompile Include="PfUpdate_Tests.cc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\orbital_mat.tcc" />
+    <None Include="src\updated_tdi.tcc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

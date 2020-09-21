@@ -1,7 +1,11 @@
-// PfUpdate_N.cc : This file contains the 'main' function. Program execution begins and ends there.
+// PfUpdate_N.cc : 
+//   This file contains the 'main' function. 
+//   Program execution begins and ends there.
+//   A simple timing test for m-electron updates.
 //
 
-#include "inv_update.tcc"
+#include "orbital_mat.tcc"
+#include "updated_tdi.tcc"
 #include <iostream>
 #include <chrono>
 #include <random>
@@ -17,22 +21,33 @@ int main(const int argc, const char *argv[]) {
   __itt_pause();
 #endif
 
-  const unsigned nsite = 450;
-  const unsigned npar = nsite * nsite;
+#ifdef _DEBUG
+  const dim_t nsite = 40;
+#else
+  const dim_t nsite = 450;
+#endif
+  const dim_t npar = nsite * nsite;
   double *Xpar = new double[npar];
-  orbital_Xij<double> param(nsite, Xpar, signed(nsite));
-  param.randomize(511);
+  orbital_mat<double> param(BLIS_UPPER, nsite, Xpar, signed(nsite));
+  param.randomize(2e-1, 511);
 
-  const unsigned nfermi = 400;
-  const unsigned nmat = nfermi * nfermi;
+#ifdef _DEBUG
+  const dim_t nfermi = 20;
+#else
+  const dim_t nfermi = 400;
+#endif
+  const dim_t nmat = nfermi * nfermi;
   double *Mbuf = new double[nmat];
-  vector<int> cfg(nfermi, 0);
+#ifdef _DEBUG
+  double *Mbuf_v = new double[nmat];
+#endif
+  vector<dim_t> cfg(nfermi, 0);
   vector<bool> mark(nsite, true);
 
   // Stupid shuffling.
   mt19937_64 rng(511);
   uniform_int_distribution<int> dist(0);
-  unsigned nempty = nsite;
+  dim_t nempty = nsite;
   for (int i = 0; i < nfermi; ++i) {
     int pos = dist(rng) % nempty;
     int cpos = 0;
@@ -43,27 +58,21 @@ int main(const int argc, const char *argv[]) {
         ++cpos;
       ++cpos; 
     }
+    while (!mark.at(cpos)) ++cpos;
+
     mark.at(cpos) = false;
     cfg.at(i) = cpos;
     --nempty;
   }
 
-  const unsigned ksize = 32;
-  double *Ubuf = new double[nfermi * ksize];
-  double *Qbuf = new double[nfermi * ksize];
-  double *Pbuf = new double[nfermi * ksize];
-  double *Wbuf = new double[ksize * ksize * 4];
-  double *Bbuf1 = new double[ksize * ksize * 4];
-  double *Bbuf2 = new double[ksize * ksize * 4];
-  double *Bbuf3 = new double[ksize * ksize * 4];
-  updated_Xij<double> Xij(param, cfg, Mbuf, nfermi, Ubuf, Pbuf, Qbuf, Wbuf,
-                          ksize * 2, Bbuf1, Bbuf2, Bbuf3);
+  const dim_t ksize = 32;
+  updated_tdi<double> Xij(param, cfg, Mbuf, nfermi, ksize);
 
-  const unsigned n_update = 8;
+  const dim_t n_update = 8;
 #ifdef _DEBUG
-  const unsigned n_test = 4;
+  const dim_t n_test = 4;
 #else
-  const unsigned n_test = 2000;
+  const dim_t n_test = 2000;
 #endif
 
   auto start = high_resolution_clock::now();
@@ -71,13 +80,18 @@ int main(const int argc, const char *argv[]) {
   __itt_resume();
 #endif
   
-  for (int itest = 0; itest < n_test; ++itest) {
-    for (int i = 0; i < n_update; ++i) {
+  for (dim_t itest = 0; itest < n_test; ++itest) {
+    for (dim_t i = 0; i < n_update; ++i) {
       // Get update.
-      int msj = dist(rng) % nfermi;
-      int osj = Xij.elem_cfg.at(msj);
+      dim_t msj = dist(rng) % nfermi;
+      dim_t osj = Xij.elem_cfg.at(msj);
       int pos = dist(rng) % nempty;
       int cpos = 0;
+
+      // Check if already hopped out.
+      for (dim_t l = 0; l < Xij.from_idx.size(); ++l)
+        if (msj == Xij.from_idx.at(l))
+          goto NEXT_LOOP;
 
       while (!mark.at(cpos)) ++cpos;
       for (; pos != 0; --pos) {
@@ -85,13 +99,35 @@ int main(const int argc, const char *argv[]) {
           ++cpos;
         ++cpos;
       }
+      while (!mark.at(cpos)) ++cpos;
+
+      // Check for hopping back in.
+      for (dim_t l = 0; l < Xij.to_site.size(); ++l)
+        if (cpos == Xij.to_site.at(l))
+          goto NEXT_LOOP;
+
       if (cpos != osj) {
         mark.at(cpos) = false;
         mark.at(osj) = true;
-        push_Xij_update<double>(Xij, cpos, msj);
+        Xij.push_update(cpos, msj);
       }
+    NEXT_LOOP:
+      cpos = 0;
     }
-    apply_Xij_update<double>(Xij);
+#ifdef _DEBUG
+    cout << "info: k=" << Xij.from_idx.size();
+#endif
+    Xij.merge_updates();
+#ifdef _DEBUG
+    cout << " merging. Pfa=" << Xij.get_Pfa() << endl;
+    updated_tdi<double> Xij_v(param, Xij.elem_cfg, Mbuf_v, nfermi, 1);
+    cout << " Verifying Pfa=" << Xij_v.get_Pfa() << endl;
+    double difA = 0.0;
+    for (dim_t j = 0; j < nfermi; ++j)
+      for (dim_t i = 0; i < nfermi; ++i)
+        difA += abs(Xij.M(i, j) - Xij_v.M(i, j)) / nfermi / nfermi;
+    cout << " Diff of inv=" << difA << endl;
+#endif
   }
 
   auto elapsed = high_resolution_clock::now() - start;
@@ -108,13 +144,9 @@ int main(const int argc, const char *argv[]) {
 
   delete[] Xpar;
   delete[] Mbuf;
-  delete[] Ubuf;
-  delete[] Qbuf;
-  delete[] Pbuf;
-  delete[] Wbuf;
-  delete[] Bbuf1;
-  delete[] Bbuf2;
-  delete[] Bbuf3;
+#ifdef _DEBUG
+  delete[] Mbuf_v;
+#endif
 
   return 0;
 }

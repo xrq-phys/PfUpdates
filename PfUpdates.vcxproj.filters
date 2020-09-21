@@ -15,11 +15,16 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src/inv_update.tcc">
-      <Filter>Header Files</Filter>
-    </ClCompile>
     <ClCompile Include="PfUpdate_Tests.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\orbital_mat.tcc">
+      <Filter>Header Files</Filter>
+    </None>
+    <None Include="src\updated_tdi.tcc">
+      <Filter>Header Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
